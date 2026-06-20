@@ -1,0 +1,7 @@
+# Large data / checkpoints — regenerate with the precollect/train scripts
+*.pt
+# keep small saved detector configs (json) — they're tiny and useful
+!*.json
+__pycache__/
+*.pyc
+/tmp/

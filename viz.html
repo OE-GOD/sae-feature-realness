@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>OE's SAE — seeing the goo</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #0d1117; color: #e6edf3; margin: 30px auto; max-width: 980px; padding: 0 20px; }
+  h1 { font-size: 22px; } h2 { font-size: 17px; margin-top: 40px; border-bottom: 1px solid #30363d; padding-bottom: 6px;}
+  .grid { display: grid; grid-template-columns: repeat(48, 1fr); gap: 1px; margin: 10px 0; }
+  .cell { aspect-ratio: 1; border-radius: 1px; }
+  .note { color: #8b949e; font-size: 13px; line-height: 1.5; }
+  .math { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; font-family: Menlo, monospace; font-size: 13px; line-height: 1.9; white-space: pre; overflow-x: auto; color: #c9d1d9; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-family: Menlo, monospace; font-size: 12px; }
+  .bar { height: 16px; background: linear-gradient(90deg, #1f6feb, #58a6ff); border-radius: 3px; }
+  .lbl { width: 110px; color: #8b949e; }
+  .big { font-size: 15px; color: #e6edf3; }
+  .tag { display: inline-block; background: #1f6feb33; border: 1px solid #1f6feb; border-radius: 12px; padding: 1px 10px; font-size: 12px; margin-left: 8px;}
+</style>
+</head>
+<body>
+<h1>Your sentence's thought, for real 🔬 <span class="tag">data: YOUR sae.pt, YOUR pile</span></h1>
+<p class="note">Sentence: <b id="sent"></b> — everything below is the LAST token's vectors, live from your files.</p>
+
+<h2>Station 1 — the word as raw numbers (embedding, before any layers)</h2>
+<p class="note">768 cells. Red = positive, blue = negative, dark = near zero. This list only means "the word 'today'" — no understanding yet.</p>
+<div class="grid" id="emb"></div>
+
+<h2>Station 2/3 — the THOUGHT after 7 layers poured understanding in (your goo)</h2>
+<p class="note">Same 768 slots — look how the pattern changed: layers ADDED interview-ness, negation, bad-vibe into these cells. Can you point at which cell holds "interview"? <b>No. Nobody can. That's the smoothie problem — this is WHY SAEs exist.</b></p>
+<div class="grid" id="x6"></div>
+
+<h2>The un-blending — your SAE reads the goo and prints the recipe</h2>
+<p class="note">2,048 ingredients scored; the bouncer kept 32; here are the top ones (feature # and strength):</p>
+<div id="bars"></div>
+
+<h2>The rebuild — decoder mixes recipe cards back into a thought</h2>
+<p class="note">Your SAE's reconstruction vs the original. Direction match: <b id="cos"></b> cosine. Same overall pattern, details lost — the price of a readable recipe.</p>
+<div class="grid" id="xhat"></div>
+
+<h2>The same story, in math (the formal way)</h2>
+<div class="math">STATION 1   x⁰ = Embed(token)                          x⁰ ∈ ℝ⁷⁶⁸
+
+STATIONS    xˡ⁺¹ = xˡ + Attn_l(xˡ) + MLP_l(xˡ)         ← running sum, layers ADD
+2/3         x⁶ = the goo you see above                  ← concepts smeared across all 768 slots
+
+SAE         scores = W_enc · x⁶ + b                     ← 2,048 dot products = 2,048 questions
+            f = TopK₃₂(scores)                          ← the bouncer: 32 survive, rest = 0
+            x̂ = Σᵢ  fᵢ · (column i of W_dec)            ← rebuild = sum of (strength × recipe card)
+
+TRAINING    loss = ‖x⁶ − x̂‖²                            ← reconstruction error → pushed DOWN
+
+FEATURE     feature i  =  column i of W_dec  ∈ ℝ⁷⁶⁸     ← an arrow. the substance. the claim.
+SAME?       cosine(colᴬ, colᴮ) = (A·B)/(‖A‖‖B‖)         ← your hand-derived formula
+            your result: only 1.0% of features had a twin &gt; 0.9 across seeds</div>
+
+<script>
+fetch('viz_data.json').then(r => r.json()).then(d => {
+  document.getElementById('sent').textContent = '"' + d.tokens.join('') + '"';
+  const paint = (id, arr) => {
+    const g = document.getElementById(id);
+    const mx = Math.max(...arr.map(Math.abs));
+    arr.forEach(v => {
+      const c = document.createElement('div');
+      c.className = 'cell';
+      const t = v / mx;
+      c.style.background = t >= 0
+        ? `rgba(248, 81, 73, ${Math.abs(t)})`
+        : `rgba(88, 166, 255, ${Math.abs(t)})`;
+      c.title = v;
+      g.appendChild(c);
+    });
+  };
+  paint('emb', d.emb);
+  paint('x6', d.x6);
+  paint('xhat', d.xhat);
+  document.getElementById('cos').textContent = d.cos;
+  const bars = document.getElementById('bars');
+  const top = d.top;
+  const mx = top[0].v;
+  top.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `<span class="lbl">feature ${t.f}</span><div class="bar" style="width:${(t.v/mx)*420}px"></div><span class="big">${t.v}</span>`;
+    bars.appendChild(row);
+  });
+});
+</script>
+</body>
+</html>
