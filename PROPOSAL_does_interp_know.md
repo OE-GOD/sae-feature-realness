@@ -1,81 +1,112 @@
 # Does interpretability know when a model is wrong?
-### Testing whether interpretability-native signals beat plain confidence for out-of-distribution abstention
+### The reliable-feature account of out-of-distribution trust, and the resourced study to test it at scale
 
-*A standalone research lead. One falsifiable question, grounded in a completed laptop-scale study.*
+*A standalone research lead, grounded in a completed laptop-scale study with proven, verified,
+and honestly-bounded results. This version supersedes the earlier draft: the central question is
+no longer open — it is answered for one regime, and the answer comes with a mechanism, a theorem,
+and a precise boundary. The resourced study tests whether that answer holds where it matters.*
 
 ---
 
-## The question
+## 1. What the laptop study established (verified, with theory)
 
-When a model's prediction can't be trusted out-of-distribution, **can an interpretability signal
-flag it better than the model's own confidence can?** Or is plain confidence all you need, and
-interpretability adds nothing to knowing-when-wrong?
+**The principle.** For an out-of-distribution prediction, trustworthiness is carried by **whether
+transfer-stable features support the call.** A prediction built on features that don't survive the
+shift is the untrustworthy one — measurable with no labels.
 
-## Why it matters, and why now
+**Proven.** A detector's error-*ranking* (AUROC) is invariant to any global monotone rescaling of
+its score, so temperature/Platt calibration cannot repair plain confidence as an error signal. And
+confidence empirically *collapses* under shift: across 6 OOD domains, corr(detector accuracy,
+confidence's error-AUROC) = **+0.87** — it only knows it is wrong when the model is already right.
 
-A detector you deploy is, by definition, run on data unlike its training set. My laptop-scale study
-([4 posts + repo](https://github.com/OE-GOD/sae-feature-realness)) established two things:
+**Mechanism (verified, and corrected from my first guess).** Restricting the probe to its
+transfer-stable features yields a **strictly better OOD oracle** (mean accuracy **0.72 → 0.82**;
+random restriction 0.62). The trust signal works by comparing the deployed model to this better
+oracle: where the call rests on shift-fragile features and the reliable view objects, it is likely
+wrong. Directly confirmed — on near-chance financial data, *wrong* predictions have reliable
+features pushing **against** them; *correct* ones have reliable features backing them. The original
+"independent failure modes" story is empirically false; "better oracle" is the right account.
 
-1. **You can't reliably make SAE-feature detectors *accurate* out-of-distribution** — 11 methods, no consistent win.
-2. **But you can make them trustworthy by abstention** — abstaining on low-confidence OOD inputs raised
-   accuracy 0.73→0.83 across three domains (verified vs random abstention).
+**Best operationalization.** A single-probe **reliable-evidence attribution** — score a prediction
+by how much of its own margin comes from reliable features — beats confidence (domain-clustered
+bootstrap AUROC gap **+0.234, P = 1.00**) and edges refit-based variants on harder shifts
+(**+0.05, P = 0.98**). Disagreement, surprisal, and evidence-attribution correlate ~0.6: three
+forms of one principle, the simplest best.
 
-The catch — and the opening for this project: **the working abstention signal was plain classifier
-confidence. The interpretability-native signal I tried (abstain when the input activates training-rare
-features) failed at chance (AUROC 0.51).** So the field's hope — that interpretability gives a privileged
-view of *when a model is operating outside its competence* — is, so far, unsupported.
+**The safety-relevant property: graceful degradation.** The interpretability signal's advantage
+over confidence **doubles as the model gets worse** (gap +0.13 when accuracy ≥ 0.75, +0.28 when
+< 0.65). On a near-chance shift you cannot fix the call, but you can still reliably gate it.
 
-That sets up a clean, high-stakes question with a binary answer: **either a properly-designed
-interpretability signal beats plain confidence at knowing-when-wrong (interpretability earns its keep for
-safety monitoring), or it doesn't (a sharp, useful negative that redirects the field to selective
-prediction).** The naive version is already ruled out, so the next test can be aimed precisely.
+**The boundary (a theorem-backed correction).** This is **not** a universal law. Marginal
+density/novelty *is* a valid error signal in an **extrapolation regime** (accuracy degrades with
+distance from training support) — verified counterexample, AUROC 0.81, no class contrast. It fails
+on the register/vocabulary shifts studied (AUROC 0.48–0.60) only because those are
+**boundary-dominated**, so novelty encodes register-distance, not wrongness. A label-free
+diagnostic distinguishes the regimes: regress novelty on margin over the unlabeled test batch.
 
-## Hypothesis and the bar
+**Honest limits.** (i) These are *ranking* results; label-free keep/abstain *thresholds* break
+under shift (split-conformal coverage drifts to 0.42–0.58 vs nominal 0.50). (ii) Scope: one model,
+one layer, sentiment, 6 domains, small n.
 
-**H:** an interpretability-native abstention signal can match or beat plain softmax confidence at
-separating a model's correct OOD predictions from its wrong ones.
+## 2. The question the resourced study answers
 
-**The bar is explicit and brutal:** plain confidence is the champion (it won at toy scale). An
-interpretability signal counts only if it *beats* confidence on held-out OOD — not if it merely "helps."
+**Does the reliable-feature account of OOD trust hold where it matters — on instruct models, for
+safety concepts, during generation — and can its known failure (label-free operating points) and
+its regime boundary be resolved at scale?**
 
-## The three signals to test (each fixes a specific toy failure)
+- **H1 (scale & safety):** reliable-evidence beats confidence at flagging wrong predictions for
+  safety concepts (toxicity, jailbreak, PII, hallucination) on instruct models, with the same
+  graceful-degradation property.
+- **H2 (generation):** the principle extends from classification to **generation** — does an
+  instruct model's next-token call, when carried by shift-fragile features, predict hallucination?
+  (Adjacent to Ferrando et al., "Do I Know This Entity?", ICLR 2025.)
+- **H3 (regime boundary at scale):** on real *extrapolation*-type shifts, density becomes the error
+  signal and reliable-evidence weakens — and the label-free diagnostic predicts which regime holds
+  before deployment.
+- **H4 (operating points, the open problem):** can any method deliver label-free coverage control
+  under shift, where standard conformal fails?
 
-1. **Attribution-weighted confidence.** *Toy failure:* the novelty signal weighted all active features
-   equally (noise). *Fix:* weight by each feature's reliability (cross-seed replication) and its causal
-   contribution to *this* prediction. Intuition: trust a prediction only if *reliable* features drove it.
-2. **Circuit-consistency.** *New, purely interpretable signal:* does the prediction route through the same
-   circuit it uses in-distribution? OOD inputs that reach the answer via the *wrong path* are
-   untrustworthy even when the output looks confident. No analog exists in plain confidence.
-3. **Reliable-subspace novelty.** *Toy failure:* raw distance over 16k dims was at chance. *Fix:* measure
-   novelty only in the low-rank subspace of the *reliable* features, with a learned threshold.
+## 3. Method
 
-## Method
+Head-to-head at scale: plain confidence vs reliable-evidence (and the disagreement/surprisal
+variants) on the error-detection task, across {≥2 instruct models} × {≥4 safety concepts} ×
+{≥4 OOD domains per concept, spanning both boundary-dominated and extrapolation shifts}. Extend to
+generation via token-level reliable-evidence and a hallucination oracle. Primary metric: AUROC and
+**AUGRC** (Traub/Jäger, NeurIPS 2024) for error-ranking; selective accuracy at matched coverage;
+graceful-degradation slope (advantage vs base accuracy). Real classifiers/oracles only; held-out
+and cross-distribution; paired and **domain-clustered** significance; leakage audits; the
+random-feature control throughout. Pre-registered, with the laptop study's discipline (including
+public self-correction).
 
-Head-to-head at scale: plain confidence vs the three interpretability signals, on the abstention task,
-across {≥2 instruct models} × {≥4 safety-relevant concepts, e.g. toxicity / jailbreak / PII / refusal} ×
-{≥4 OOD domains per concept}. Primary metric: **selective-accuracy AUROC** (does the signal rank correct
-predictions above wrong ones OOD), plus accuracy-vs-coverage curves and silent-failure rate. Pre-registered
-discipline carried from the prior study: real classifiers/oracles only, held-out + cross-distribution,
-paired significance, leakage audits, and **always beat the simple baseline (plain confidence).**
+## 4. Outcomes (all publishable)
 
-## Outcomes (both publishable)
+- **Holds:** interpretability provides a deployable, mechanism-backed OOD trust monitor whose edge
+  grows where the model is weakest — the positive safety contribution.
+- **Regime-bounded:** the boundary-dominated vs extrapolation split governs which signal to use,
+  with a label-free diagnostic — a usable map, not a single trick.
+- **Fails at scale:** a clean negative that redirects the field (e.g., the account is sentiment- or
+  small-model-specific) — still worth reporting.
 
-- **Interpretability wins:** a signal beats confidence → interpretability provides genuine, deployable
-  value for safety monitoring (knowing when a model is outside its competence). The positive contribution.
-- **Interpretability loses:** none beat confidence across the board → a clean negative — *for OOD trust,
-  use selective prediction, not SAE-feature signals* — which saves the field real effort and is itself a
-  finding worth reporting.
+## 5. Why I'm positioned to run it
 
-## Why I'm positioned to run it
+The laptop study already (a) established the principle with a proven theorem and a verified
+mechanism, (b) found and verified the best operationalization, (c) mapped the regime boundary with a
+reproduced counterexample, (d) built the full detector + cross-distribution + harder-shift pipeline,
+and (e) practiced adversarial self-checking — four fleets built to break my own claims, two of
+which succeeded and forced corrections now public. This is the precise, resourced next step, not a
+fresh start.
 
-The laptop study already (a) ruled out the naive interpretability signal, (b) verified the abstention
-result it must beat, (c) built the detector + cross-distribution + abstention pipeline, and (d) practiced
-the verification discipline (including publicly retracting a result that failed re-testing). This project
-is the precise, resourced next step — not a fresh start.
+## 6. Resources
 
-## Resources / feasibility
+GPU for instruct-model probing, generation, and abstention eval at scale; released SAE suites
+(Gemma Scope, Llama Scope); labeled safety datasets with multiple OOD domains of *both* shift types;
+judge models / real classifiers as oracles. Primarily inference + analysis — tractable within a
+focused fellowship-scale project.
 
-GPU for instruct-model probing + abstention eval at scale; released SAE suites (Gemma Scope, Llama Scope);
-labeled safety datasets (toxicity, jailbreak, PII) with multiple OOD domains; judge models / real
-classifiers as oracles. No model training required beyond light probing — primarily inference + analysis,
-so it is tractable within a focused fellowship-scale project.
+## 7. Positioning
+
+Against Kantamneni et al. ("Are SAEs Useful?", ICML 2025) — SAE structure can be load-bearing for
+**selective risk** even where it is not for accuracy; against Agreement-on-the-Line (Baek et al.,
+NeurIPS 2022) — per-instance, model-vs-its-reliable-self, not two independent full models; alongside
+Ferrando et al. (ICLR 2025) for the generation extension; using AUGRC (Traub/Jäger, NeurIPS 2024)
+and reporting where conformal validity breaks under shift.
