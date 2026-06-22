@@ -28,8 +28,11 @@ def _scorr(Z, y):
 
 def _augrc(trust, correct):
     # area under generalized risk-coverage curve (Traub/Jaeger 2024): avg risk of
-    # undetected failures; lower is better. order by descending trust.
-    order = np.argsort(-trust); c = correct[order].astype(float)
+    # undetected failures; lower is better. order by descending trust, breaking ties
+    # RANDOMLY (deterministic seed) — row-order tie-breaks biased binary signals when
+    # the data is label-ordered (audit, June 2026).
+    tie = np.random.RandomState(0).permutation(len(trust))
+    order = np.lexsort((tie, -trust)); c = correct[order].astype(float)
     n = len(c); cov = np.arange(1, n + 1) / n
     risk = np.cumsum(1 - c) / n            # generalized risk: errors / TOTAL, not /kept
     return float(np.mean(risk))            # area under (coverage, generalized-risk)
